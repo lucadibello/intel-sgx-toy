@@ -1,77 +1,81 @@
 version: "3"
 
 vars:
-    IMAGE_NAME: '{{.IMAGE_NAME | default "openenclave-devcontainer"}}'
-    CONTAINER_NAME: '{{.CONTAINER_NAME | default (printf "%s-dev" (basename .PWD))}}'
-    DOCKERFILE: '{{.DOCKERFILE | default ".devcontainer/Dockerfile"}}'
+  IMAGE_NAME: '{{.IMAGE_NAME | default "my-devcontainer"}}'
+  CONTAINER_NAME: '{{.CONTAINER_NAME | default "devcontainer"}}'
+  DOCKERFILE: '{{.DOCKERFILE | default ".devcontainer/Dockerfile"}}'
 
-    # Where your repo is mounted inside the container
-    WORKDIR: '{{.WORKDIR | default (printf "/workspaces/%s" (basename .PWD))}}'
+  # Where your repo is mounted inside the container
+  WORKDIR: '{{.WORKDIR | default "/workspaces/project"}}'
 
-    # Bind SSH only to cluster loopback; you'll tunnel into it
-    SSH_BIND_HOST: '{{.SSH_BIND_HOST | default "127.0.0.1"}}'
-    SSH_PORT: '{{.SSH_PORT | default "2222"}}' # cluster-side mapped port
-    LOCAL_TUNNEL_PORT: '{{.LOCAL_TUNNEL_PORT | default "8022"}}' # host-side port
+  # Bind SSH only to cluster loopback; you'll tunnel into it
+  SSH_BIND_HOST: '{{.SSH_BIND_HOST | default "127.0.0.1"}}'
+  SSH_PORT: '{{.SSH_PORT | default "2222"}}' # cluster-side mapped port
+  LOCAL_TUNNEL_PORT: '{{.LOCAL_TUNNEL_PORT | default "8022"}}' # laptop-side port
 
-    # Container user mirrors cluster user to keep file perms clean
-    USERNAME: '{{.USERNAME | default (env "USER") }}'
-    UID: '{{.UID | default (shell "id -u") }}'
-    GID: '{{.GID | default (shell "id -g") }}'
+  # Container user mirrors cluster user to keep file perms clean
+  USERNAME: '{{.USERNAME | default "devuser" }}'
+  UID: '{{.UID | default "1000" }}'
+  GID: '{{.GID | default "1000" }}'
 
-    # Try common pubkeys; fallback to first line of authorized_keys
-    SSH_PUBKEY: |
-        {{.SSH_PUBKEY | default (shell `
-          [ -f ~/.ssh/id_ed25519.pub ] && cat ~/.ssh/id_ed25519.pub || \
-          [ -f ~/.ssh/id_rsa.pub ] && cat ~/.ssh/id_rsa.pub || \
-          [ -f ~/.ssh/authorized_keys ] && head -n1 ~/.ssh/authorized_keys || true
-        `) }}
+  # Grab SSH pubkey if present
+  SSH_PUBKEY: '{{.SSH_PUBKEY | default ""}}'
 
 tasks:
-    build:
-        desc: Build the devcontainer image (with SSH inside)
-        cmds:
-            - test -f "{{.DOCKERFILE}}" || (echo "Missing {{.DOCKERFILE}}" && exit 1)
-            - docker build \
-              --build-arg USER_NAME={{.USERNAME}} \
-              --build-arg USER_UID={{.UID}} \
-              --build-arg USER_GID={{.GID}} \
-              -t {{.IMAGE_NAME}} \
-              -f {{.DOCKERFILE}} .
+  build:
+    desc: Build the devcontainer image (with SSH baked in)
+    cmds:
+      - test -f "{{.DOCKERFILE}}" || (echo "Missing {{.DOCKERFILE}}" && exit 1)
+      - >
+        docker build -t {{.IMAGE_NAME}}
+        --build-arg USER_NAME={{.USERNAME}}
+        --build-arg USER_UID={{.UID}}
+        --build-arg USER_GID={{.GID}}
+        -f {{.DOCKERFILE}} .
 
-    up:
-        desc: Run container on cluster; expose SSH on 127.0.0.1:{{.SSH_PORT}}
-        deps: [build]
-        cmds:
-            - |
-                if [ -z "{{.SSH_PUBKEY}}" ]; then
-                  echo "No SSH public key found on the cluster (~/.ssh/*.pub or authorized_keys)."
-                  echo "Upload your public key to the cluster (e.g., ssh-copy-id) or set SSH_PUBKEY var."
-                  exit 1
-                fi
-            - |
-                if docker ps -a --format '{{`{{.Names}}`}}' | grep -qx "{{.CONTAINER_NAME}}"; then
-                  echo "Container {{.CONTAINER_NAME}} already exists. Starting…"
-                  docker start {{.CONTAINER_NAME}}
-                else
-                  docker run -d \
-                    --name {{.CONTAINER_NAME}} \
-                    -p {{.SSH_BIND_HOST}}:{{.SSH_PORT}}:22 \
-                    -v "$PWD:{{.WORKDIR}}" \
-                    -e DEVUSER={{.USERNAME}} \
-                    -e DEVUID={{.UID}} \
-                    -e DEVGID={{.GID}} \
-                    -e SSH_PUBKEY="{{.SSH_PUBKEY}}" \
-                    -w "{{.WORKDIR}}" \
-                    {{.IMAGE_NAME}}
-                fi
-            - task: info
+  up:
+    desc: Run container on the cluster; expose SSH on 127.0.0.1:{{.SSH_PORT}}
+    deps: [build]
+    cmds:
+      - |
+        if docker ps -a --format '{{`{{.Names}}`}}' | grep -qx "{{.CONTAINER_NAME}}"; then
+          echo "Container {{.CONTAINER_NAME}} already exists. Starting…"
+          docker start {{.CONTAINER_NAME}}
+        else
+          docker run -d \
+            --name {{.CONTAINER_NAME}} \
+            -p {{.SSH_BIND_HOST}}:{{.SSH_PORT}}:22 \
+            -v "$PWD:{{.WORKDIR}}" \
+            -e DEVUSER={{.USERNAME}} \
+            -e DEVUID={{.UID}} \
+            -e DEVGID={{.GID}} \
+            -e SSH_PUBKEY="{{.SSH_PUBKEY}}" \
+            -w "{{.WORKDIR}}" \
+            {{.IMAGE_NAME}}
+        fi
+      - |
+        echo
+        echo "=== From your laptop, create the SSH tunnel ==="
+        echo "ssh -N -L {{.LOCAL_TUNNEL_PORT}}:127.0.0.1:{{.SSH_PORT}} <cluster_user>@<cluster_host>"
+        echo
+        echo "Then connect your IDE/SSH client to:"
+        echo "  Host: localhost"
+        echo "  Port: {{.LOCAL_TUNNEL_PORT}}"
+        echo "  User: {{.USERNAME}}"
+        echo
+        if [ -z "{{.SSH_PUBKEY}}" ]; then
+          echo "NOTE: SSH_PUBKEY is empty. Either:"
+          echo "  - set SSH_PUBKEY=\"\$(cat ~/.ssh/id_ed25519.pub)\" when running 'task up', or"
+          echo "  - mount a file at /ssh/authorized_keys in docker run (adapt the Taskfile if you prefer)."
+          echo
+        fi
 
-    attach:
-        desc: Exec into the container (on the cluster)
-        cmds:
-            - docker exec -it {{.CONTAINER_NAME}} bash || docker exec -it {{.CONTAINER_NAME}} sh
+  attach:
+    desc: Exec into the container (on the cluster)
+    cmds:
+      - docker exec -it {{.CONTAINER_NAME}} bash || docker exec -it {{.CONTAINER_NAME}} sh
 
-    down:
-        desc: Stop & remove the container
-        cmds:
-            - docker rm -f {{.CONTAINER_NAME}} 2>/dev/null || true
+  down:
+    desc: Stop & remove the container
+    cmds:
+      - docker rm -f {{.CONTAINER_NAME}} 2>/dev/null || true

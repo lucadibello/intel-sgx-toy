@@ -29,8 +29,11 @@ RUN mkdir -p /var/run/sshd /etc/ssh/sshd_config.d && \
     'UsePAM yes' \
     > /etc/ssh/sshd_config.d/devcontainer.conf
 
-# Runtime init script: set authorized_keys from env or mORKDIR ${WORKSPACE}
+# copy override entrypoint script (see below)
+COPY .devcontainer/devcontainer-entrypoint.sh /usr/local/bin/devcontainer-entrypoint
+RUN chmod +x /usr/local/bin/devcontainer-entrypoint
 
+# Runtime init script: set authorized_keys from env or mORKDIR ${WORKSPACE}
 EXPOSE 22
 
 # tini as PID 1, then our entrypoint will exec sshd (or any CMD you pass)
