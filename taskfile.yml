@@ -1,0 +1,77 @@
+version: "3"
+
+vars:
+    IMAGE_NAME: '{{.IMAGE_NAME | default "openenclave-devcontainer"}}'
+    CONTAINER_NAME: '{{.CONTAINER_NAME | default (printf "%s-dev" (basename .PWD))}}'
+    DOCKERFILE: '{{.DOCKERFILE | default ".devcontainer/Dockerfile"}}'
+
+    # Where your repo is mounted inside the container
+    WORKDIR: '{{.WORKDIR | default (printf "/workspaces/%s" (basename .PWD))}}'
+
+    # Bind SSH only to cluster loopback; you'll tunnel into it
+    SSH_BIND_HOST: '{{.SSH_BIND_HOST | default "127.0.0.1"}}'
+    SSH_PORT: '{{.SSH_PORT | default "2222"}}' # cluster-side mapped port
+    LOCAL_TUNNEL_PORT: '{{.LOCAL_TUNNEL_PORT | default "8022"}}' # host-side port
+
+    # Container user mirrors cluster user to keep file perms clean
+    USERNAME: '{{.USERNAME | default (env "USER") }}'
+    UID: '{{.UID | default (shell "id -u") }}'
+    GID: '{{.GID | default (shell "id -g") }}'
+
+    # Try common pubkeys; fallback to first line of authorized_keys
+    SSH_PUBKEY: |
+        {{.SSH_PUBKEY | default (shell `
+          [ -f ~/.ssh/id_ed25519.pub ] && cat ~/.ssh/id_ed25519.pub || \
+          [ -f ~/.ssh/id_rsa.pub ] && cat ~/.ssh/id_rsa.pub || \
+          [ -f ~/.ssh/authorized_keys ] && head -n1 ~/.ssh/authorized_keys || true
+        `) }}
+
+tasks:
+    build:
+        desc: Build the devcontainer image (with SSH inside)
+        cmds:
+            - test -f "{{.DOCKERFILE}}" || (echo "Missing {{.DOCKERFILE}}" && exit 1)
+            - docker build \
+              --build-arg USER_NAME={{.USERNAME}} \
+              --build-arg USER_UID={{.UID}} \
+              --build-arg USER_GID={{.GID}} \
+              -t {{.IMAGE_NAME}} \
+              -f {{.DOCKERFILE}} .
+
+    up:
+        desc: Run container on cluster; expose SSH on 127.0.0.1:{{.SSH_PORT}}
+        deps: [build]
+        cmds:
+            - |
+                if [ -z "{{.SSH_PUBKEY}}" ]; then
+                  echo "No SSH public key found on the cluster (~/.ssh/*.pub or authorized_keys)."
+                  echo "Upload your public key to the cluster (e.g., ssh-copy-id) or set SSH_PUBKEY var."
+                  exit 1
+                fi
+            - |
+                if docker ps -a --format '{{`{{.Names}}`}}' | grep -qx "{{.CONTAINER_NAME}}"; then
+                  echo "Container {{.CONTAINER_NAME}} already exists. Starting…"
+                  docker start {{.CONTAINER_NAME}}
+                else
+                  docker run -d \
+                    --name {{.CONTAINER_NAME}} \
+                    -p {{.SSH_BIND_HOST}}:{{.SSH_PORT}}:22 \
+                    -v "$PWD:{{.WORKDIR}}" \
+                    -e DEVUSER={{.USERNAME}} \
+                    -e DEVUID={{.UID}} \
+                    -e DEVGID={{.GID}} \
+                    -e SSH_PUBKEY="{{.SSH_PUBKEY}}" \
+                    -w "{{.WORKDIR}}" \
+                    {{.IMAGE_NAME}}
+                fi
+            - task: info
+
+    attach:
+        desc: Exec into the container (on the cluster)
+        cmds:
+            - docker exec -it {{.CONTAINER_NAME}} bash || docker exec -it {{.CONTAINER_NAME}} sh
+
+    down:
+        desc: Stop & remove the container
+        cmds:
+            - docker rm -f {{.CONTAINER_NAME}} 2>/dev/null || true
