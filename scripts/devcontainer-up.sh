@@ -42,6 +42,10 @@ else
     -e DEVUID="$DEV_UID" \
     -e DEVGID="$DEV_GID" \
     -e SSH_PUBKEY="$SSH_PUBKEY" \
+    --device /dev/sgx_enclave \
+    --device /dev/sgx_provision \
+    --device /dev/sgx_vepc \
+    --ulimit memlock=-1:-1 \
     -w "${WORKDIR}" \
     "$IMAGE_NAME" >/dev/null
   echo "Started $CONTAINER_NAME"
