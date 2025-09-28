@@ -5,6 +5,7 @@ FROM openenclavedockerregistry.azurecr.io/oetools-22.04:2025.03.13148
 ARG USER_NAME=dev
 ARG USER_UID=1000
 ARG USER_GID=1000
+ARG OE_SDK_VERSION=0.19.13 # latest version
 
 # Install SSH server + sudo + tini (to be a sane PID 1)
 RUN apt-get update && \
@@ -52,7 +53,16 @@ RUN mkdir -p /var/run/sshd /etc/ssh/sshd_config.d && \
 COPY .devcontainer/devcontainer-entrypoint.sh /usr/local/bin/devcontainer-entrypoint
 RUN chmod +x /usr/local/bin/devcontainer-entrypoint
 
-# Runtime init script: set authorized_keys from env or mORKDIR ${WORKSPACE}
+# download and install Open Enclave SDK
+WORKDIR /tmp
+RUN wget -q https://github.com/openenclave/openenclave/releases/download/v0.19.13/Ubuntu_2204_open-enclave_${OE_SDK_VERSION}_amd64.deb && \
+    dpkg -i Ubuntu_2204_open-enclave_${OE_SDK_VERSION}_amd64.deb && \
+    rm Ubuntu_2204_open-enclave_${OE_SDK_VERSION}_amd64.deb && \
+    echo 'export PATH=$PATH:/opt/openenclave/bin' >> /etc/profile.d/openenclave.sh && \
+    echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/openenclave/lib' >> /etc/profile.d/openenclave.sh && \
+    chmod +x /etc/profile.d/openenclave.sh
+
+# Expose ssh port
 EXPOSE 22
 
 # tini as PID 1, then our entrypoint will exec sshd (or any CMD you pass)
