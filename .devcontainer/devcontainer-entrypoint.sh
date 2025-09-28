@@ -14,10 +14,27 @@ if ! ls /etc/ssh/ssh_host_* >/dev/null 2>&1; then
   ssh-keygen -A
 fi
 
-# If the user got recreated with different IDs via env, ensure it exists (idempotent best-effort)
-if ! id -u "$DEVUSER" >/dev/null 2>&1; then
-  groupadd -g "$DEVGID" "$DEVUSER" || true
-  useradd -m -u "$DEVUID" -g "$DEVGID" -s /bin/bash "$DEVUSER" || true
+# Ensure group/user exist and match requested IDs
+if getent group "$DEVGID" >/dev/null; then
+  EXIST_GRP="$(getent group "$DEVGID" | cut -d: -f1)"
+  [ "$EXIST_GRP" = "$DEVUSER" ] || groupmod -n "$DEVUSER" "$EXIST_GRP"
+elif getent group "$DEVUSER" >/dev/null; then
+  groupmod -g "$DEVGID" "$DEVUSER"
+else
+  groupadd -g "$DEVGID" "$DEVUSER"
+fi
+
+if id -u "$DEVUSER" >/dev/null 2>&1; then
+  CUR_UID="$(id -u "$DEVUSER")"
+  CUR_GID="$(id -g "$DEVUSER")"
+  [ "$CUR_GID" = "$DEVGID" ] || groupmod -g "$DEVGID" "$DEVUSER" || true
+  if [ "$CUR_UID" != "$DEVUID" ]; then
+    usermod -u "$DEVUID" -g "$DEVGID" "$DEVUSER" || true
+    USER_HOME="$(getent passwd "$DEVUSER" | cut -d: -f6)"
+    chown -R "$DEVUID:$DEVGID" "$USER_HOME" 2>/dev/null || true
+  fi
+else
+  useradd -m -s /bin/bash -u "$DEVUID" -g "$DEVGID" "$DEVUSER"
   usermod -aG sudo "$DEVUSER" || true
 fi
 
