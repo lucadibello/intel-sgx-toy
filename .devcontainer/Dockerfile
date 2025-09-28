@@ -1,5 +1,5 @@
-# Base (your Open Enclave image)
-FROM openenclavedockerregistry.azurecr.io/openenclave-base-ubuntu-22.04:2025.03.13148
+# Ubuntu 22.04 + OpenEnclave
+FROM openenclavedockerregistry.azurecr.io/oetools-22.04:2025.03.13148
 
 # --- Dev user setup (override via build args if needed) ---
 ARG USER_NAME=dev
