@@ -57,9 +57,15 @@ RUN chmod +x /usr/local/bin/devcontainer-entrypoint
 WORKDIR /tmp
 RUN wget -q https://github.com/openenclave/openenclave/releases/download/v0.19.13/Ubuntu_2204_open-enclave_${OE_SDK_VERSION}_amd64.deb && \
     dpkg -i Ubuntu_2204_open-enclave_${OE_SDK_VERSION}_amd64.deb && \
-    rm Ubuntu_2204_open-enclave_${OE_SDK_VERSION}_amd64.deb && \
-    echo 'export PATH=$PATH:/opt/openenclave/bin' >> /etc/profile.d/openenclave.sh && \
-    echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/openenclave/lib' >> /etc/profile.d/openenclave.sh && \
+    rm Ubuntu_2204_open-enclave_${OE_SDK_VERSION}_amd64.deb
+
+WORKDIR /workspaces/project
+
+# ensure open-enclave environment variables are set
+RUN echo 'export PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:/opt/openenclave/share/pkgconfig"' >> /etc/profile.d/openenclave.sh && \
+    echo 'export CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}:/opt/openenclave/lib/openenclave/cmake"' >> /etc/profile.d/openenclave.sh && \
+    echo 'export PATH="${PATH}:/opt/openenclave/bin"' >> /etc/profile.d/openenclave.sh && \
+    echo 'export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/opt/openenclave/lib"' >> /etc/profile.d/openenclave.sh && \
     chmod +x /etc/profile.d/openenclave.sh
 
 # Expose ssh port
