@@ -36,8 +36,9 @@ else
   # Map SSH only on loopback; mount repo; pass user IDs and key
   docker run -d \
     --name "$CONTAINER_NAME" \
+    --ulimit memlock=-1:-1 \
     -p "${SSH_BIND_HOST}:${SSH_PORT}:22" \
-    -v "$PWD:${WORKDIR}" \
+    -v "$PWD:${WORKDIR}:rw" \
     -e DEVUSER="$DEV_USERNAME" \
     -e DEVUID="$DEV_UID" \
     -e DEVGID="$DEV_GID" \
@@ -45,7 +46,6 @@ else
     --device /dev/sgx_enclave \
     --device /dev/sgx_provision \
     --device /dev/sgx_vepc \
-    --ulimit memlock=-1:-1 \
     -w "${WORKDIR}" \
     "$IMAGE_NAME" >/dev/null
   echo "Started $CONTAINER_NAME"
