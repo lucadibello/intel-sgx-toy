@@ -10,7 +10,7 @@ add_custom_command(
     --search-path ${OE_INCLUDEDIR} --search-path
     ${OE_INCLUDEDIR}/openenclave/edl/sgx)
 
-add_executable(enclave enc.c ${CMAKE_CURRENT_BINARY_DIR}/helloworld_t.c)
+add_executable(enclave enc.cpp ${CMAKE_CURRENT_BINARY_DIR}/helloworld_t.c)
 
 if (WIN32)
   maybe_build_using_clangw(enclave)

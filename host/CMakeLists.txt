@@ -8,7 +8,7 @@ add_custom_command(
     --search-path ${OE_INCLUDEDIR} --search-path
     ${OE_INCLUDEDIR}/openenclave/edl/sgx)
 
-add_executable(helloworld_host host.c
+add_executable(helloworld_host host.cpp
                                ${CMAKE_CURRENT_BINARY_DIR}/helloworld_u.c)
 
 if (WIN32)
