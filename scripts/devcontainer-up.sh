@@ -12,6 +12,8 @@ DEV_USERNAME=${DEV_USERNAME:-dev}
 DEV_UID=${DEV_UID:-1000}
 DEV_GID=${DEV_GID:-1000}
 SSH_PUBKEY=${SSH_PUBKEY:-}
+GIT_USER_NAME=${GIT_USER_NAME:-}
+GIT_USER_EMAIL=${GIT_USER_EMAIL:-}
 
 # if no SSH key provided (passed as text, not filepath), exit with error message
 if [ -z "${SSH_PUBKEY// }" ]; then
@@ -43,6 +45,8 @@ else
     -e DEVUID="$DEV_UID" \
     -e DEVGID="$DEV_GID" \
     -e SSH_PUBKEY="$SSH_PUBKEY" \
+    -e GIT_USER_NAME="$GIT_USER_NAME" \
+    -e GIT_USER_EMAIL="$GIT_USER_EMAIL" \
     --device /dev/sgx_enclave \
     --device /dev/sgx_provision \
     --device /dev/sgx_vepc \

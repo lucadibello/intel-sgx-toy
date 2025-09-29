@@ -69,5 +69,11 @@ if [ -n "${PRINT_SSH_HINTS:-1}" ]; then
   echo "  ssh -p 2222 ${DEVUSER}@127.0.0.1"
 fi
 
+# setup git config for the dev user
+if [ -n "${GIT_USER_NAME:-}" ] && [ -n "${GIT_USER_EMAIL:-}" ]; then
+  sudo -u "$DEVUSER" git config --global user.name "$GIT_USER_NAME"
+  sudo -u "$DEVUSER" git config --global user.email "$GIT_USER_EMAIL"
+fi
+
 # Exec original CMD (sshd -D -e by default)
 exec "$@"

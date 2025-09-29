@@ -15,29 +15,29 @@ RUN apt-get update && \
 
 # Create dev user matching host UID/GID to avoid permission issues
 RUN set -eux; \
-  if getent group "${USER_GID}" >/dev/null; then \
+    if getent group "${USER_GID}" >/dev/null; then \
     EXIST_GRP="$(getent group "${USER_GID}" | cut -d: -f1)"; \
     [ "${EXIST_GRP}" = "${USER_NAME}" ] || groupmod -n "${USER_NAME}" "${EXIST_GRP}"; \
-  elif getent group "${USER_NAME}" >/dev/null; then \
+    elif getent group "${USER_NAME}" >/dev/null; then \
     groupmod -g "${USER_GID}" "${USER_NAME}"; \
-  else \
+    else \
     groupadd -g "${USER_GID}" "${USER_NAME}"; \
-  fi; \
-  if getent passwd "${USER_UID}" >/dev/null; then \
+    fi; \
+    if getent passwd "${USER_UID}" >/dev/null; then \
     EXIST_USER="$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
     if [ "${EXIST_USER}" != "${USER_NAME}" ]; then \
-      usermod -l "${USER_NAME}" "${EXIST_USER}"; \
-      usermod -d "/home/${USER_NAME}" -m "${USER_NAME}"; \
+    usermod -l "${USER_NAME}" "${EXIST_USER}"; \
+    usermod -d "/home/${USER_NAME}" -m "${USER_NAME}"; \
     fi; \
     usermod -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}" || true; \
-  elif id -u "${USER_NAME}" >/dev/null 2>&1; then \
+    elif id -u "${USER_NAME}" >/dev/null 2>&1; then \
     usermod -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}" || true; \
-  else \
+    else \
     useradd -m -s /bin/bash -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}"; \
-  fi; \
-  usermod -aG sudo "${USER_NAME}"; \
-  echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/90-"${USER_NAME}"; \
-  chmod 0440 /etc/sudoers.d/90-"${USER_NAME}"
+    fi; \
+    usermod -aG sudo "${USER_NAME}"; \
+    echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/90-"${USER_NAME}"; \
+    chmod 0440 /etc/sudoers.d/90-"${USER_NAME}"
 
 # SSHD config: key-only, no root password login
 RUN mkdir -p /var/run/sshd /etc/ssh/sshd_config.d && \
@@ -67,6 +67,15 @@ RUN echo 'export PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:/opt/openenclave/share/pkgc
     echo 'export PATH="${PATH}:/opt/openenclave/bin"' >> /etc/profile.d/openenclave.sh && \
     echo 'export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/opt/openenclave/lib"' >> /etc/profile.d/openenclave.sh && \
     chmod +x /etc/profile.d/openenclave.sh
+
+# generate new ssh key to authenticate with git repo
+RUN mkdir -p /home/${USER_NAME}/.ssh && \
+    ssh-keygen -t ed25519 -f /home/${USER_NAME}/.ssh/id_ed25519 -N '' -C 'devcontainer-key' && \
+    chmod 700 /home/${USER_NAME}/.ssh && \
+    chmod 600 /home/${USER_NAME}/.ssh/id_ed25519 && \
+    echo "==== Generated SSH Public Key ====" && \
+    cat /home/${USER_NAME}/.ssh/id_ed25519.pub && \
+    echo "================================="
 
 # Expose ssh port
 EXPOSE 22
