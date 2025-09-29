@@ -1,23 +1,35 @@
 # Copyright (c) Open Enclave SDK contributors.
 # Licensed under the MIT License.
+
+# Use the edger8r to generate C bindings from the EDL file.
 add_custom_command(
-  OUTPUT helloworld_u.h helloworld_u.c helloworld_args.h
+  OUTPUT helloworld_t.h helloworld_t.c helloworld_args.h
   DEPENDS ${CMAKE_SOURCE_DIR}/helloworld.edl
   COMMAND
-    openenclave::oeedger8r --untrusted ${CMAKE_SOURCE_DIR}/helloworld.edl
+    openenclave::oeedger8r --trusted ${CMAKE_SOURCE_DIR}/helloworld.edl
     --search-path ${OE_INCLUDEDIR} --search-path
     ${OE_INCLUDEDIR}/openenclave/edl/sgx)
 
-add_executable(helloworld_host host.c
-                               ${CMAKE_CURRENT_BINARY_DIR}/helloworld_u.c)
+add_executable(enclave enc.c ${CMAKE_CURRENT_BINARY_DIR}/helloworld_t.c)
 
 if (WIN32)
-  copy_oedebugrt_target(helloworld_host_oedebugrt)
-  add_dependencies(helloworld_host helloworld_host_oedebugrt)
+  maybe_build_using_clangw(enclave)
 endif ()
 
-target_include_directories(
-  helloworld_host PRIVATE # Needed for the generated file helloworld_u.h
-                          ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_definitions(enclave PUBLIC OE_API_VERSION=2)
 
-target_link_libraries(helloworld_host openenclave::oehost)
+# Need for the generated file helloworld_t.h
+target_include_directories(enclave PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+if (LVI_MITIGATION MATCHES ControlFlow)
+  # Helper to enable compiler options for LVI mitigation.
+  apply_lvi_mitigation(enclave)
+  # Link against LVI-mitigated libraries.
+  target_link_libraries(
+    enclave openenclave::oeenclave-lvi-cfg
+    openenclave::oecrypto${OE_CRYPTO_LIB}-lvi-cfg openenclave::oelibc-lvi-cfg)
+else ()
+  target_link_libraries(
+    enclave openenclave::oeenclave openenclave::oecrypto${OE_CRYPTO_LIB}
+    openenclave::oelibc)
+endif ()
