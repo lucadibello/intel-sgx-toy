@@ -39,6 +39,10 @@ RUN set -eux; \
     echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/90-"${USER_NAME}"; \
     chmod 0440 /etc/sudoers.d/90-"${USER_NAME}"
 
+# add dev user in `sgx` group to access sgx device without sudo. Create the group first if it doesn't exist
+RUN if ! getent group sgx >/dev/null; then groupadd sgx; fi && \
+    usermod -aG sgx ${USER_NAME}
+
 # SSHD config: key-only, no root password login
 RUN mkdir -p /var/run/sshd /etc/ssh/sshd_config.d && \
     printf '%s\n' \
